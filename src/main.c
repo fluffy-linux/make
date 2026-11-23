@@ -25,8 +25,12 @@ this program.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "debug.h"
 #include "getopt.h"
 #include "shuffle.h"
+#include "findprog.h"
 
 #include <assert.h>
+#ifndef WINDOWS32
+# include <paths.h>
+#endif
 #ifdef _AMIGA
 # include <dos/dos.h>
 # include <proto/dos.h>
@@ -2027,6 +2031,29 @@ main (int argc, char **argv, char **envp)
 
   /* Define the initial list of suffixes for old-style rules.  */
   set_default_suffixes ();
+
+#ifndef WINDOWS32
+  /* Detect default shell if default /bin/sh is not accessible.  */
+  {
+    extern const char *default_shell;
+    if (access (default_shell, X_OK) != 0)
+      {
+        if (access (_PATH_BSHELL, X_OK) == 0)
+          default_shell = _PATH_BSHELL;
+        else
+          {
+            const char *p = getenv ("PATH");
+            if (!p)
+              p = _PATH_DEFPATH;
+            const char *sh = find_in_given_path ("sh", p, NULL, 0);
+            if (!sh)
+              sh = find_in_given_path ("bash", p, NULL, 0);
+            if (sh)
+              default_shell = sh;
+          }
+      }
+  }
+#endif
 
   /* Define some internal and special variables.  */
   define_automatic_variables ();

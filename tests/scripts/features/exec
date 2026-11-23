@@ -15,8 +15,9 @@ my $details = "The various shells that this test uses are the default"
 $port_type eq 'UNIX' or return -1;
 $^O =~ /cygwin/ and return -1;
 
-my @shbangs = ('', '#!/bin/sh', "#!$perl_name");
-my @shells = ('', 'SHELL=/bin/sh');
+my $default_sh = -x '/bin/sh' ? '/bin/sh' : $sh_name;
+my @shbangs = ('', "#!$default_sh", "#!$perl_name");
+my @shells = ('', "SHELL=$default_sh");
 
 # Try whatever shell the user has, as long as it's not a C shell.
 # The C shell is not usable with make, due to not correctly handling
@@ -68,5 +69,40 @@ SHELL = #PERL#
 .SHELLFLAGS = -e
 all:; @printf "$(ANSWER)\n";
 !, "ANSWER='$answer'", "$answer\n");
+
+# test 16
+# Verify wildcard PATH resolution via find_in_given_path (direct posix_spawn
+# fast path without /bin/sh) and un-overridden SHELL execution.
+{
+    mkdir('wroot', 0755);
+    mkdir('wroot/pkg1', 0755);
+    mkdir('wroot/pkg1/bin', 0755);
+    my $wcmd = 'wroot/pkg1/bin/wdirect';
+    open(my $fh, '>', $wcmd) or die "open $wcmd: $!";
+    print $fh "#!$default_sh\nprintf \"wild-ok\\n\"\n";
+    close($fh);
+    chmod 0755, $wcmd;
+
+    local $ENV{PATH} = "$cwdpath/wroot/*/bin:$ENV{PATH}";
+    run_make_test(q!
+all:
+	@wdirect
+	@echo shell-ok && true
+!, '', "wild-ok\nshell-ok\n");
+
+    if (-d '/sw/bash/bin') {
+        local $ENV{PATH} = "$cwdpath/wroot/*/bin:/sw/*/bin";
+        run_make_test(q!
+all:
+	@wdirect
+	@echo sw-wild-ok && true
+!, '', "wild-ok\nsw-wild-ok\n");
+    }
+
+    unlink($wcmd);
+    rmdir('wroot/pkg1/bin');
+    rmdir('wroot/pkg1');
+    rmdir('wroot');
+}
 
 1;

@@ -75,6 +75,7 @@ char * vms_strsignal (int status);
 #endif
 
 #else
+# include <paths.h>
 
 const char *default_shell = "/bin/sh";
 int batch_mode_shell = 0;
@@ -2430,12 +2431,17 @@ child_execute_job (struct childbase *child, int good_stdin, char **argv)
     /* execvp() will use a default PATH if none is set; emulate that.  */
     if (p == NULL)
       {
-        size_t l = confstr (_CS_PATH, NULL, 0);
-        if (l)
+        if (access ("/bin", F_OK) != 0)
+          p = _PATH_DEFPATH;
+        else
           {
-            char *dp = alloca (l);
-            confstr (_CS_PATH, dp, l);
-            p = dp;
+            size_t l = confstr (_CS_PATH, NULL, 0);
+            if (l)
+              {
+                char *dp = alloca (l);
+                confstr (_CS_PATH, dp, l);
+                p = dp;
+              }
           }
       }
 
@@ -2630,7 +2636,7 @@ exec_command (char **argv, char **envp)
 # else
         shell = getenv ("SHELL");
 # endif
-        if (shell == 0)
+        if (shell == 0 || (access (shell, X_OK) != 0 && (streq (shell, "/bin/sh") || streq (shell, "/./bin/sh"))))
           shell = default_shell;
 
         argc = 1;
@@ -2896,7 +2902,7 @@ construct_command_argv_internal (char *line, char **restp, const char *shell,
     shellflags = posix_pedantic && NONE_SET (flags, COMMANDS_NOERROR) ? "-ec" : "-c";
 
   /* See if it is safe to parse commands internally.  */
-  if (shell == 0)
+  if (shell == 0 || (access (shell, X_OK) != 0 && (streq (shell, "/bin/sh") || streq (shell, "/./bin/sh"))))
     shell = default_shell;
 #ifdef WINDOWS32
   else if (strcmp (shell, default_shell))
