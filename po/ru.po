@@ -1,0 +1,1 @@
+../translationproject/PO-files/ru/make-4.4.0.90.ru.po
